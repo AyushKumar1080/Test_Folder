@@ -2,7 +2,7 @@ import requests
 
 import streamlit as st
 
-FASTAPI_URL = "https://doc-rag-1.onrender.com"
+FASTAPI_URL = "http://54.252.167.248:8000"
 
 st.title("Hybrid RAG")
 
