@@ -1,36 +1,25 @@
 import requests
-
+import uuid
 import streamlit as st
 
 FASTAPI_URL = "http://54.252.167.248:8000"
 
 st.title("Hybrid RAG")
 
-uploaded_file = st.file_uploader(
-    "Upload Document",
-    type=["pdf","txt","csv","docx"]
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
 
-)
+uploaded_file = st.file_uploader("Upload Document", type=["pdf","txt","csv","docx"])
 
 if uploaded_file:
 
     files = {
-
-        "file":(
-
-            uploaded_file.name,
-
-            uploaded_file.getvalue()
-
-        )
-
+        "file":(uploaded_file.name, uploaded_file.getvalue())
     }
-
+    data = {"thread_id": st.session_state.thread_id}
+    
     try:
-        response = requests.post(
-            f"{FASTAPI_URL}/upload",
-            files=files
-        )
+        response = requests.post(f"{FASTAPI_URL}/upload", files=files, data=data)
 
         response.raise_for_status()
 
@@ -51,18 +40,13 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-question = st.text_input(
-    "Ask Question"
-)
+question = st.text_input("Ask Question")
 
 if st.button("Submit"):
-
     try:
         response = requests.post(
             f"{FASTAPI_URL}/ask",
-            data={
-                "question": question
-            }
+            data={"question": question, "thread_id":st.session_state.thread_id}
         )
 
         response.raise_for_status()
