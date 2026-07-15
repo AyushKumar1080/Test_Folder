@@ -1,64 +1,101 @@
-import requests
 import uuid
+import requests
 import streamlit as st
 
 FASTAPI_URL = "http://54.252.167.248:8000"
 
-st.title("Hybrid RAG")
+st.set_page_config(
+    page_title="Hybrid RAG",
+    page_icon="📚",
+    layout="wide"
+)
+
+st.title("📚 Hybrid RAG")
 
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
 
-uploaded_file = st.file_uploader("Upload Document", type=["pdf","txt","csv","docx"])
+with st.sidebar:
 
-if uploaded_file:
+    st.header("Session")
 
-    files = {
-        "file":(uploaded_file.name, uploaded_file.getvalue())
-    }
-    data = {"thread_id": st.session_state.thread_id}
-    
-    try:
-        response = requests.post(f"{FASTAPI_URL}/upload", files=files, data=data)
+    st.caption("Current Conversation")
 
-        response.raise_for_status()
+    st.code(st.session_state.thread_id)
 
-        st.success(response.json()["message"])
+    if st.button("🆕 New Chat"):
+        st.session_state.thread_id = str(uuid.uuid4())
+        st.rerun()
 
-    except requests.exceptions.HTTPError:
+uploaded_file = st.file_uploader(
+    "Upload Document",
+    type=["pdf", "txt", "csv", "docx"]
+)
+
+if uploaded_file is not None:
+
+    if ("uploaded_file_name" not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name):
+        files = {
+            "file": (uploaded_file.name, uploaded_file.getvalue())
+        }
+
+        data = {"thread_id": st.session_state.thread_id}
+
         try:
-            st.error(response.json()["detail"])
-        except Exception:
-            st.error("Failed to upload document.")
+            with st.spinner("Uploading document..."):
+                response = requests.post(
+                    f"{FASTAPI_URL}/upload",
+                    files=files,
+                    data=data
+                )
+            response.raise_for_status()
 
-    except requests.exceptions.ConnectionError:
-        st.error("Could not connect to the backend server.")
+            st.session_state.uploaded_file_name = uploaded_file.name
 
-    except requests.exceptions.Timeout:
-        st.error("Request timed out.")
+            st.success(response.json()["message"])
 
-    except Exception as e:
-        st.error(f"Unexpected error: {e}")
+        except requests.exceptions.HTTPError:
+            try:
+                st.error(response.json()["detail"])
+            except Exception:
+                st.error("Failed to upload document.")
+
+        except requests.exceptions.ConnectionError:
+            st.error("Could not connect to the backend server.")
+
+        except requests.exceptions.Timeout:
+            st.error("Request timed out.")
+
+        except Exception as e:
+            st.error(f"Unexpected error: {e}")
 
 question = st.text_input("Ask Question")
 
 if st.button("Submit"):
+    if not question.strip():
+        st.warning("Please enter a question.")
+        st.stop()
     try:
-        response = requests.post(
-            f"{FASTAPI_URL}/ask",
-            data={"question": question, "thread_id":st.session_state.thread_id}
-        )
+        with st.spinner("Generating answer..."):
+            response = requests.post(
+                f"{FASTAPI_URL}/ask",
+                data={"question": question, "thread_id": st.session_state.thread_id }
+            )
 
         response.raise_for_status()
 
         result = response.json()
 
         st.subheader("Answer")
+
         st.write(result["answer"])
 
         if "chunks" in result:
+
             with st.expander("Retrieved Chunks"):
+
                 for chunk in result["chunks"]:
+
                     st.write(chunk)
                     st.divider()
 
