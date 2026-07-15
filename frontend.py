@@ -1,4 +1,3 @@
-import uuid
 import requests
 import streamlit as st
 
@@ -12,74 +11,56 @@ st.set_page_config(
 
 st.title("📚 Hybrid RAG")
 
-if "thread_id" not in st.session_state:
-    st.session_state.thread_id = str(uuid.uuid4())
-
-with st.sidebar:
-
-    st.header("Session")
-
-    st.caption("Current Conversation")
-
-    st.code(st.session_state.thread_id)
-
-    if st.button("🆕 New Chat"):
-        st.session_state.thread_id = str(uuid.uuid4())
-        st.rerun()
-
-uploaded_file = st.file_uploader(
-    "Upload Document",
-    type=["pdf", "txt", "csv", "docx"]
-)
+uploaded_file = st.file_uploader("Upload Document",type=["pdf", "txt", "csv", "docx"])
 
 if uploaded_file is not None:
 
-    if ("uploaded_file_name" not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name):
-        files = {
-            "file": (uploaded_file.name, uploaded_file.getvalue())
-        }
+    files = {
+        "file": (uploaded_file.name,uploaded_file.getvalue())
+    }
 
-        data = {"thread_id": st.session_state.thread_id}
+    try:
+
+        with st.spinner("Uploading document..."):
+
+            response = requests.post(
+                f"{FASTAPI_URL}/upload",
+                files=files
+            )
+
+        response.raise_for_status()
+
+        st.success(response.json()["message"])
+
+    except requests.exceptions.HTTPError:
 
         try:
-            with st.spinner("Uploading document..."):
-                response = requests.post(
-                    f"{FASTAPI_URL}/upload",
-                    files=files,
-                    data=data
-                )
-            response.raise_for_status()
+            st.error(response.json()["detail"])
+        except Exception:
+            st.error("Failed to upload document.")
 
-            st.session_state.uploaded_file_name = uploaded_file.name
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to the backend server.")
 
-            st.success(response.json()["message"])
+    except requests.exceptions.Timeout:
+        st.error("Request timed out.")
 
-        except requests.exceptions.HTTPError:
-            try:
-                st.error(response.json()["detail"])
-            except Exception:
-                st.error("Failed to upload document.")
-
-        except requests.exceptions.ConnectionError:
-            st.error("Could not connect to the backend server.")
-
-        except requests.exceptions.Timeout:
-            st.error("Request timed out.")
-
-        except Exception as e:
-            st.error(f"Unexpected error: {e}")
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
 
 question = st.text_input("Ask Question")
 
 if st.button("Submit"):
+
     if not question.strip():
         st.warning("Please enter a question.")
         st.stop()
+
     try:
         with st.spinner("Generating answer..."):
             response = requests.post(
                 f"{FASTAPI_URL}/ask",
-                data={"question": question, "thread_id": st.session_state.thread_id }
+                data={"question": question}
             )
 
         response.raise_for_status()
@@ -95,7 +76,6 @@ if st.button("Submit"):
             with st.expander("Retrieved Chunks"):
 
                 for chunk in result["chunks"]:
-
                     st.write(chunk)
                     st.divider()
 
